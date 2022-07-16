@@ -1,46 +1,39 @@
 /*-----------------------------------------------------*/
 /*本程序由Han编写，用于ESP8266的图形GUI*/
 /*系统名称：HanOS*/
-/*仅供学习参考*/
 /*建议配合ESP8266 Expansion By Han拓展板v2.0+使用*/
+/*仅供学习参考*/
 /*-----------------------------------------------------*/
-#include <ArduinoJson.h>
-#include <Adafruit_SSD1306.h>
+
 #include <SPI.h>
 #include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
 #include <ESP8266WiFi.h>
 #include <WiFiUdp.h>
 #include <NTPClient.h>
 #include <ESP8266HTTPClient.h>
 #include <EEPROM.h>
 
-#define VERSION "v1.26"	/*系统版本*/
+#define VERSION "v1.21"	/*系统版本*/
 
 /*按键引脚定义*/
 #define YES_KEY D6
 #define UP_KEY D5
 #define DOWN_KEY D7
 
-#define LED D3
-
 /*按键标志定义*/
 #define YES_KEY_DOWN digitalRead(YES_KEY) == 1
 #define UP_KEY_DOWN digitalRead(UP_KEY) == 1
 #define DOWN_KEY_DOWN digitalRead(DOWN_KEY) == 1
 
-#define LED_ON digitalWrite(LED, LOW);
-#define LED_OFF digitalWrite(LED, HIGH);
+#define GET_DATE_URL "http://api.seniverse.com/v3/weather/now.json?key=SD3_n8JmylHc9EUyq&location=baoding"
 
-#define GET_DATE_URL "http://quan.suning.com/getSysTime.do"
-#define GET_FANS_URL "http://api.bilibili.com/x/relation/stat?vmid=385995212"
-#define GET_WATCH_URL "http://api.bilibili.com/x/space/upstat?mid=385995212"
-
-String ssid = "U-home";		/*WiFi SSID*/
-String password = "MyHome_16$5334783";		/*WiFi Password*/
-
+const char* ssid = "------";		/*WiFi SSID*/
+const char* password = "------";		/*WiFi Password*/
 
 HTTPClient http;
-WiFiClient client;
+
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "ntp1.aliyun.com", 60 * 60 * 8, 30 * 60 * 1000);
 
@@ -70,151 +63,59 @@ int desktop_time = 0;   //桌面时间标志
 int desktop_mode = 3;
 int title_y = -5;		//当前下拉标题y轴坐标
 
-String menu_mode = "desktop_clock";
+String menu_mode = "desktop_OSLogo";		//显示模式 （1：桌面，2：主菜单，3：子菜单，4：WiFi时钟）
 int menu_num = 1;		//主菜单中选中的列表数字
 int menu_line = 1;
-int menu_page = 0;		//菜单中页面的层数(0为初始页)
 
 int an_switch_y = 1 * menu_num * 14;	//选中框当前y轴
 int switch_y = an_switch_y;
 
+
 int addr_desktop_mode = 0;
-
-int start_time = 0;
-
-
-/*Serial String*/
-
-String serial_in = "";
-
-/*时钟动画部分*/
-int s_y = 27;
-String last_time = "";
-String now_time = "";
-int y_now_time = s_y + 1;
-int y_last_time = y_now_time - 20;
-bool isClock_Finished = false;
-
-String last_time_ = "";
-String now_time_ = "";
-int y_now_time_ = s_y + 1;
-int y_last_time_ = y_now_time_ - 20;
-bool isClock_Finished_ = false;
-
-/*Game Space War部分*/
-int space_player_x = 0;
-int space_player_y = 20;
-int space_player_shell_x[20] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-int space_player_shell_y[20] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-int space_stone_x[20] = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };
-int space_stone_y[20] = { 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30 };
-int space_stone_speed_x[20] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-int space_stone_speed_y[20] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-int space_war_score = 0;
-bool space_isOver = false;
-int timer_play = 0;
-int space_over_y = 65;
-int space_history_best = EEPROM.read(2);
-
-
-/*Bilibili Client*/
-String HotVideoHtml = "";
-int fans_num = 0;
-int like_num = 0;
-int play_num = 0;
-
-/*input box*/
-const char text_note[] = {
-	'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 
-	'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 
-	'1', '2', '3', '4', '5', '6', '7', '8', '9', '0',
-	'_', '-', '+', '=', '/', '\\', '!', '@', '#', '$', '&', '*', '(', ')', '{', '}', '[', ']', 
-	'\0'
-};		//字库
-int text_note_length = 0;		//当前字库中的字符数量
-int input_now_notice = 0;       //当前选中的字符从左到右的序数
-int input_text_in = 0;			//当前选中的字符在字库中的排序
-int input_text_width = 18;		//输入框最多输入的字符数量
-char input_text[200];
-String passportText;
-String final_text;
-
-
-/*WiFi Scan*/
-int wifi_scan_num = 0;
-String wifi_scan_label[200] = {""};
-bool wifi_is_connected = false;
-int EEPROM_Scan[200] = {};
-int EEPROM_SSID_Scan[200] = {};
 
 /*----------------------列表文字显示----------------------*/
 
-String main_label[500] = {
+String main_label[4] = {
 	"Function",
 	"WiFi Tool",
 	"Debug",
-	"System Sittings",
-	""
+	"System Sitting"
 };
 
-String Function_label[500] = {
+String Function_label[4] = {
 	"Timer",
-	"Desktop Sittings",
+	"Desktop Sitting",
 	"Flappy Bird",
-	"Space War",
-	""
+	"Greedy Snake"
 };
 
-String WiFiTool_label[500] = {
+String WiFiTool_label[4] = {
 	"WiFi Clock",
 	"WiFi Server",
-	"BiliBili",
 	"WiFi Killer",
-	"WiFi Info",
-	"WiFi Scan",
-	""
+	"WiFi Fishing"
 };
 
-String Debug_label[500] = {
+String Debug_label[4] = {
 	"Serial Test",
 	"LED Test",
 	"WiFi Test",
-	"OLED Test",
-	"Input Box",
-	""
+	"OLED Test"
 };
 
-String SystemSitting_label[500] = {
+String SystemSitting_label[4] = {
 	"Reset",
 	"System Info",
-	"Start Time",
-	"Shutdown",
-	""
+	"About",
+	"Shutdown"
 };
 
-String SystemInfo_label[500] = {
+String SystemInfo_label[4] = {
 	"System:Han OS",
 	"Version:" + String(VERSION),
 	"Base:ESP8266",
-	"ESP-E v2.0+",
-	""
+	"ESP-E v2.0+"
 };
-
-String DesktopSittings_label[500] = {
-	"Han Logo",
-	"Clock",
-	"Han OS Logo",
-	""
-};
-
-int main_label_length = 0;
-int Function_label_length = 0;
-int WiFiTool_label_length = 0;
-int Debug_label_length = 0;
-int SystemSitting_label_length = 0;
-int SystemInfo_label_length = 0;
-int DesktopSittings_label_length = 0;
-
 
 /*-------------------------------------------------------*/
 
@@ -355,7 +256,6 @@ const unsigned char HanOS_Logo[] PROGMEM = { 0x00,0x00,0x00,0x00,0x00,0x00,0x00,
 void setup() {
 	/*OLED初始化*/
 	display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
-
 	display.clearDisplay();
 	display.display();
 	display.setTextSize(1);
@@ -363,17 +263,12 @@ void setup() {
 
 	Serial.begin(115200);
 
-	/*EEPROM Init*/
-	EEPROM.begin(512);
-	read_desktop_mode();
-
 	/*WiFi Init*/
 	WiFi.mode(WIFI_STA);
 	WiFi.begin(ssid, password);
-
 	timeClient.begin();
 
-	//http.begin(GET_DATE_URL);
+	http.begin(GET_DATE_URL);
 	http.setTimeout(5000);
 
 	/*按键初始化*/
@@ -381,87 +276,8 @@ void setup() {
 	pinMode(UP_KEY, INPUT);
 	pinMode(DOWN_KEY, INPUT);
 
-	pinMode(LED, OUTPUT);
-	LED_OFF;
-
-	//Serial.print(desktop_mode);
-	//Serial.print(EEPROM.read(1));
-
-	for (int i = 0; Function_label[i] != ""; i++) {
-		Function_label_length++;
-	}
-	for (int i = 0; WiFiTool_label[i] != ""; i++) {
-		WiFiTool_label_length++;
-	}
-	for (int i = 0; Debug_label[i] != ""; i++) {
-		Debug_label_length++;
-	}
-	for (int i = 0; SystemSitting_label[i] != ""; i++) {
-		SystemSitting_label_length++;
-	}
-	for (int i = 0; SystemInfo_label[i] != ""; i++) {
-		SystemInfo_label_length++;
-	}
-	for (int i = 0; DesktopSittings_label[i] != ""; i++) {
-		DesktopSittings_label_length++;
-	}
-	for (int i = 0; text_note[i] != '\0'; i++) {
-		text_note_length++;
-	}
-
 	/*OLED开机进度条*/
 	start_animation();
-	if (!wifi_is_connected) {
-		wifi_scan_update();
-		menu_mode = "wifi_scan";
-
-		int overTime = millis() / 1000;
-
-		while (WiFi.status() != WL_CONNECTED) {
-			overTime = millis() / 1000;
-			display.clearDisplay();
-			wifi_show_connect();
-			display.display();
-			KEY_scan();
-
-			if (yes) {
-				//input_box(wifi_scan_label[menu_num]);
-				WiFi.begin(wifi_scan_label[menu_num], password);
-				yes = false;
-				Serial.println("yes");
-				break;
-			}
-		}
-
-		while (WiFi.status() != WL_CONNECTED || overTime <= 10);
-
-		Serial.println("OverTime");
-
-		while (WiFi.status() != WL_CONNECTED) {
-			KEY_scan();
-
-			display.clearDisplay();
-
-			input_box(wifi_scan_label[menu_num - 1]);
-
-			if (hold) {
-				WiFi.begin(wifi_scan_label[menu_num - 1], passportText);
-				Serial.println("Hold on");
-				Serial.println(wifi_scan_label[menu_num - 1]);
-				Serial.println(passportText);
-				break;
-			}
-
-			display.display();
-
-			hold = false;
-			yes = false;
-		}
-
-		while (1);
-	}
-
-	update_fans_num();
 	//desktop_mode = EEPROM.read(addr_desktop_mode);
 }
 
@@ -479,13 +295,7 @@ OLED显示程序伪入口
 void OLED_display() {
 	display.clearDisplay();
 
-	if (yes || hold) {
-		LED_ON;
-	}
-
-	else {
-		LED_OFF;
-	}
+	KEY_scan();
 
 	if (yes && tIsShow && menu_mode == "desktop") {
 		menu_mode = "main_menu";
@@ -541,76 +351,6 @@ void OLED_display() {
 		yes = false;
 	}
 
-	else if (yes && menu_mode == "sub_menu" && menu_num == 3 && menu_line == 4) {
-		menu_mode = "start_time";
-		yes = false;
-	}
-
-	else if (yes && menu_mode == "sub_menu" && menu_num == 2 && menu_line == 1) {
-		menu_mode = "desktop_sittings";
-		yes = false;
-	}
-
-	else if (yes && menu_mode == "sub_menu" && menu_num == 5 && menu_line == 2) {
-		menu_mode = "wifi_info";
-		yes = false;
-	}
-
-	else if (yes && menu_mode == "sub_menu" && menu_num == 1 && menu_line == 3) {
-		menu_mode = "serial_test";
-		yes = false;
-	}
-
-	else if (yes && menu_mode == "sub_menu" && menu_num == 4 && menu_line == 1) {
-		menu_mode = "space_war";
-		space_war_init();
-		space_history_best = EEPROM.read(2);
-		yes = false;
-	}
-
-	else if (yes && menu_mode == "sub_menu" && menu_num == 3 && menu_line == 2) {
-		menu_mode = "bilibili";
-		show_bilibili_client();
-		update_fans_num();
-	}
-
-	else if (yes && menu_mode == "desktop_sittings" && menu_page == 0) {
-		desktop_mode = menu_num;
-		EEPROM.write(1, desktop_mode);
-		EEPROM.commit();
-		//Serial.print(EEPROM.read(1));
-		if (desktop_mode == 1)
-			menu_mode = "desktop";
-		else if (desktop_mode == 2)
-			menu_mode = "desktop_clock";
-		else if (desktop_mode == 3)
-			menu_mode = "desktop_OSLogo";
-		yes = false;
-	}
-
-	else if (yes && menu_mode == "sub_menu" && menu_num == 5 && menu_line == 3) {
-		menu_mode = "input_box";
-		yes = false;
-	}
-
-	else if (yes && menu_mode == "sub_menu" && menu_num == 6 && menu_line == 2) {
-		WiFi.disconnect();
-		yes = false;
-
-		pro = 0;
-
-		for (int i = 0; i < input_text_width; i++) {
-			EEPROM.write(i + 3, 255);
-		}
-
-		EEPROM.commit();
-
-		setup();
-		//setup();
-	}
-
-	/*------------------------------*/
-
 	if (menu_mode == "desktop")
 		show_desktop();
 
@@ -651,44 +391,7 @@ void OLED_display() {
 		hold = false;
 	}
 
-	else if (menu_mode == "start_time") {
-		show_system_start_time();
-	}
-
-	else if (menu_mode == "desktop_sittings") {
-		switch_desktop();
-	}
-
-	else if (menu_mode == "wifi_info") {
-		show_wifi_info();
-	}
-
-	else if (menu_mode == "serial_test") {
-		serial_test();
-	}
-
-	else if (menu_mode == "space_war") {
-		game_space_war();
-	}
-
-	else if (menu_mode == "bilibili") {
-		show_bilibili_client();
-		if (millis() % 1000 == 0) {
-			update_fans_num();
-		}
-	}
-
-	else if (menu_mode == "input_box") {
-		input_box("Password");
-	}
-
-	yes = false;
-	up = false;
-	down = false;
-	hold = false;
-
-	KEY_scan();
-
+	//Serial.println(menu_mode);
 	display.display();
 }
 
@@ -698,21 +401,39 @@ show_desktop()  桌面显示函数
 void show_desktop() {
 	display.drawBitmap(0, 10, HAN_LOGO, 128, 64, SSD1306_WHITE);
 
-	desktop_time++;
+	if (yes && menu_mode == "desktop") {
+		desktop_time = 0;
+		yes = false;
+	}
+	else
+		desktop_time++;
 
 	if (desktop_time >= 150)
 		ctrl_title("Desktop", false);
 	else
 		ctrl_title("Desktop", true);
 
-	if (yes && menu_mode == "desktop")
+	if (down && menu_mode == "desktop") {
 		desktop_time = 0;
+		menu_mode = "desktop_clock";
+		desktop_mode = 2;
+	}
+
+	up = false;
+	down = false;
+	yes = false;
 }
 
 void show_desktop_clock() {
 	show_clock();
 
-	desktop_time++;
+	if (yes && menu_mode == "desktop_clock") {
+		desktop_time = 0;
+		yes = false;
+	}
+
+	else
+		desktop_time++;
 
 	if (desktop_time >= 150) {
 		ctrl_title("Desktop", false);
@@ -722,22 +443,47 @@ void show_desktop_clock() {
 		ctrl_title("Desktop", true);
 	}
 
-	if (yes && menu_mode == "desktop_clock")
+	if (up && menu_mode == "desktop_clock") {
 		desktop_time = 0;
+		menu_mode = "desktop";
+		desktop_mode = 1;
+	}
+
+	if (down && menu_mode == "desktop_clock") {
+		desktop_time = 0;
+		menu_mode = "desktop_OSLogo";
+		desktop_mode = 3;
+	}
+
+	up = false;
+	down = false;
+	yes = false;
 }
 
 void show_desktop_OSlogo() {
 	display.drawBitmap(0, 10, HanOS_Logo, 128, 64, SSD1306_WHITE);
 
-	desktop_time++;
+	if (yes && menu_mode == "desktop_OSLogo") {
+		desktop_time = 0;
+		yes = false;
+	}
+	else
+		desktop_time++;
 
 	if (desktop_time >= 150)
 		ctrl_title("Desktop", false);
 	else
 		ctrl_title("Desktop", true);
 
-	if (yes && menu_mode == "desktop_OSLogo")
+	if (up && menu_mode == "desktop_OSLogo") {
 		desktop_time = 0;
+		menu_mode = "desktop_clock";
+		desktop_mode = 2;
+	}
+
+	up = false;
+	down = false;
+	yes = false;
 }
 
 void show_menu(String title) {
@@ -751,15 +497,7 @@ void show_menu(String title) {
 }
 
 void show_menu_label() {
-	if (menu_num <= 4)
-		an_switch_y = menu_num * 14;
-	else {
-		if(menu_num % 4 != 0)
-			an_switch_y = (menu_num % 4) * 14;
-		else
-			an_switch_y = 4 * 14;
-	}
-		
+	an_switch_y = menu_num * 14;
 	int text_target_x = 20;
 
 	display.fillRect(125, switch_y - 6, 15, 14, 1);
@@ -780,7 +518,7 @@ void show_menu_label() {
 		display.setTextColor(1);
 		display.setTextSize(1);
 
-		if ((i + 1) == (menu_num % 4) || (i + 1) == menu_num) {
+		if ((i + 1) == menu_num) {
 			if (text_x_l[i] < text_target_x)
 				text_x_l[i]++;
 			else if (text_x_l[i] > text_target_x)
@@ -796,42 +534,18 @@ void show_menu_label() {
 
 		display.setCursor(text_x_l[i], y - 2);
 
-		if (menu_mode == "main_menu") {
-			if (menu_num > 4)
-				menu_num = 4;
+		if (menu_mode == "main_menu")
 			display.print(main_label[i]);
-		}
-			
 		else if (menu_mode == "sub_menu") {
 			switch (menu_line) {
 			case 1:
 				display.print(Function_label[i]);
 				break;
 			case 2:
-				if (WiFiTool_label[i] == "" && menu_num >= i + 1) {
-					menu_num = i;
-				}
-				if (menu_num > WiFiTool_label_length)
-					menu_num = WiFiTool_label_length;
-				/*if (menu_num % 4 == 0 || menu_num <= 4)
-					display.print(wifi_scan_label[i]);
-				else*/
-				if (menu_num % 4 == 0)
-					display.print(WiFiTool_label[i + ((menu_num - 1) / 4) * 4]);
-				else
-					display.print(WiFiTool_label[i + (menu_num / 4) * 4]);
+				display.print(WiFiTool_label[i]);
 				break;
 			case 3:
-				if (Debug_label[i] == "" && menu_num >= i + 1) {
-					menu_num = i;
-				}
-
-				if (menu_num > Debug_label_length)
-					menu_num = Debug_label_length;
-				if (menu_num <= 4)
-					display.print(Debug_label[i]);
-				else
-					display.print(Debug_label[i + menu_num - 1]);
+				display.print(Debug_label[i]);
 				break;
 			case 4:
 				display.print(SystemSitting_label[i]);
@@ -851,45 +565,11 @@ void show_menu_label() {
 				break;
 			}
 		}
-
-		else if (menu_mode == "desktop_sittings") {
-			switch (menu_line) {
-			case 1:
-				display.print(DesktopSittings_label[i]);
-				if (DesktopSittings_label[i] == "" && menu_num >= i + 1) {
-					menu_num = i;
-				}
-				break;
-			case 2:
-				break;
-			case 3:
-				break;
-			case 4:
-				break;
-			}
-		}
-
-		else if (menu_mode == "wifi_scan") {
-				if (wifi_scan_label[i] == "" && menu_num >= i + 1) {
-					menu_num = i;
-				}
-				if (menu_num > wifi_scan_num)
-					menu_num = wifi_scan_num;
-				/*if (menu_num % 4 == 0 || menu_num <= 4)
-					display.print(wifi_scan_label[i]);
-				else*/
-				if(menu_num % 4 == 0)
-					display.print(wifi_scan_label[i + ((menu_num - 1) / 4) * 4]);
-				else
-					display.print(wifi_scan_label[i + (menu_num / 4) * 4]);
-				//Serial.println(i + ((menu_num - 1) / 4) * 4);
-		}
 	}
 }
 
 void change_page() {
 	if (menu_mode != "desktop") {
-		//menu_page = menu_num / 4;
 		if (up) {
 			menu_num--;
 			up = false;
@@ -899,20 +579,11 @@ void change_page() {
 			down = false;
 		}
 
-		//if (menu_num > 4) {
-		//	menu_num = 4;
-		//	menu_page++;
-		//}
+		if (menu_num > 4)
+			menu_num = 4;
 
-
-		if (menu_num < 1) {
+		else if (menu_num < 1)
 			menu_num = 1;
-			//menu_page--;
-		}
-
-		/*if (menu_page < 0) {
-			menu_page = 0;
-		}*/
 	}
 }
 
@@ -923,22 +594,22 @@ isShow(true~false):下拉标题是否隐藏
 */
 void ctrl_title(String title, bool isShow) {
 	if (isShow && !tIsShow) {
-		if (title_y < 8)
+		if (title_y < 13)
 			title_y++;
-		else if (title_y == 8)
+		else if (title_y = 13)
 			tIsShow = true;
 	}
 
 	else if (!isShow && tIsShow) {
 		if (title_y > -5)
 			title_y--;
-		else if (title_y == -5)
+		else if (title_y = -5)
 			tIsShow = false;
 	}
 
 	display.drawLine(0, title_y, 128, title_y, SSD1306_WHITE);
 	display.setTextSize(1);
-	display.setCursor(4, title_y - 8);
+	display.setCursor(3, title_y - 10);
 	display.print(title);
 }
 
@@ -960,15 +631,15 @@ void KEY_scan() {
 		/*显示长按提示进度条*/
 		if (isDown_hold == false) {
 			sTime += 5;
-			if (sTime >= 3 * 30 && menu_mode != "desktop" && menu_mode != "desktop_clock" && menu_mode != "desktop_OSLogo" && menu_mode != "shutdown") {
+			if (sTime >= 3 * 30 && menu_mode != "desktop" && menu_mode != "desktop_clock" && menu_mode != "shutdown") {
 				pro += 5;
+				if (menu_mode == "clock")
+					show_progress(pro, 12);
+				else
+					show_progress(pro, 7);
 			}
-			else {
-				pro -= 6;
-				if (pro < 0)
-					pro = 0;
-			}
-
+			else
+				pro = 0;
 			//display.display();
 
 			if (sTime >= 128 + 3 * 30) {
@@ -977,31 +648,19 @@ void KEY_scan() {
 				sTime = 0;
 				pro = 0;
 				isDown_yes = true;
-				//yes = false;
 			}
 		}
 	}
 
 	else {
-		if (sTime < 3 * 30 && isDown_yes == true && isDown_hold == false) {
+		if (sTime < 128 + 3 * 30 && isDown_yes == true && isDown_hold == false)
 			yes = true;
-			sTime = 0;
-		}
 
-		if (sTime >= 3 * 30 && sTime <= 128 + 3 * 30) {
-			yes = false;
-			pro -= 7;
-			if (pro < 0) {
-				pro = 0;
-				sTime = 0;
-			}
-		}
-
+		sTime = 0;
+		pro = 0;
 		isDown_yes = false;
 		isDown_hold = false;
 	}
-	
-	show_progress(pro, 7);
 
 	/*判断向上键是否按下*/
 	if (UP_KEY_DOWN && isDown_up == false) {
@@ -1009,7 +668,7 @@ void KEY_scan() {
 		isDown_up = true;
 	}
 
-	if (UP_KEY_DOWN == false)
+	if (!UP_KEY_DOWN)
 		isDown_up = false;
 
 	/*判断向下键是否按下*/
@@ -1018,7 +677,7 @@ void KEY_scan() {
 		isDown_down = true;
 	}
 
-	if (DOWN_KEY_DOWN == false)
+	if (!DOWN_KEY_DOWN)
 		isDown_down = false;
 }
 
@@ -1042,24 +701,9 @@ void start_animation() {
 		display.display();
 	}
 
-	Serial.println();
-	Serial.println("             ___               ___");
-	Serial.println("            /  / \\            /  /");
-	Serial.println("           /  /\\  \\          /  /");
-	Serial.println("          /  /  \\  \\        /  /");
-	Serial.println("         /  /    \\  \\      /  /");
-	Serial.println("        /  / ___________  /  /");
-	Serial.println("       /  / /__________/ /  /");
-	Serial.println("      /  /              /  /");
-	Serial.println("     /  /      \\  \\    /  /");
-	Serial.println("    /  /        \\  \\  /  /");
-	Serial.println("   /  /          \\  \\/  /");
-	Serial.println("  /__/            \\ /__/");
-	Serial.println("            Han OS");
-
 	delay(1000);
 
-	while (pro <= 128 || WiFi.status() != WL_CONNECTED) {
+	while (pro <= 128) {
 		display.clearDisplay();
 		show_progress(pro, 60);
 
@@ -1069,24 +713,12 @@ void start_animation() {
 		display.setTextSize(1);
 		display.print(VERSION);
 
-		//display.display();
-		if (WiFi.status() != WL_CONNECTED && !Serial.available())
+		display.display();
+		if (WiFi.status() != WL_CONNECTED)
 			pro += 1;
 		else
 			pro += 2;
-
-		if (millis() / 1000 >= 10) {
-			wifi_is_connected = false;
-			break;
-			//display.clearDisplay();
-			//wifi_show_connect();
-		}
-		else if(WiFi.status() != WL_CONNECTED)
-			wifi_is_connected = true;
-
-		display.display();
 	}
-
 	get_years();
 }
 
@@ -1096,23 +728,20 @@ value(0~128):进度
 y(0~64):进度条y轴坐标
 */
 void show_progress(int value, int y) {
-	if(value != 0)
-		display.drawLine(-1, y, value, y, SSD1306_WHITE);
-	//Serial.println(value);
+	display.drawLine(0, y, value, y, SSD1306_WHITE);
 }
 
 void get_years() {
-	http.begin(GET_DATE_URL);
 	int httpCode = http.GET();
 	String str = "";
 	if (httpCode > 0) {
 		if (httpCode == HTTP_CODE_OK) {
 			str = http.getString();
-
-			years = str.substring(13, 17);
-			months = str.substring(18, 20);
-			days = str.substring(21, 23);
-			//temp = str.substring(215, 217);
+			//Serial.println(str);
+			years = str.substring(234, 238);
+			months = str.substring(239, 241);
+			days = str.substring(242, 244);
+			temp = str.substring(214, 216);
 		}
 	}
 	//Serial.println(httpCode);
@@ -1147,63 +776,15 @@ String get_days() {
 }
 
 void show_clock() {
-	if (last_time != timeClient.getFormattedTime().substring(7, 8)) {
-		if (y_now_time > s_y)
-			y_now_time -= 1;
-		if (y_now_time == s_y) {
-			y_now_time = s_y + 25;
-			isClock_Finished = true;
-		}
-		y_last_time = y_now_time - 25;
-	}
-
-	if (last_time_ != timeClient.getFormattedTime().substring(6, 7)) {
-		if (y_now_time_ > s_y)
-			y_now_time_ -= 1;
-		if (y_now_time_ == s_y) {
-			y_now_time_ = s_y + 25;
-			isClock_Finished_ = true;
-		}
-		y_last_time_ = y_now_time_ - 25;
-	}
-
-	/*秒显示*/
-	display.setTextSize(2);
-	display.setCursor(110, y_now_time);
-
-	display.print(timeClient.getFormattedTime().substring(7, 8));
-
-	display.setCursor(110, y_last_time);
-	display.print(last_time);
-
-	if (isClock_Finished) {
-		last_time = timeClient.getFormattedTime().substring(7, 8);
-		isClock_Finished = false;
-	}
-
-	/*---------*/
-
-	display.setTextSize(2);
-	display.setCursor(97, y_now_time_);
-	display.print(timeClient.getFormattedTime().substring(6, 7));
-
-	display.setCursor(97, y_last_time_);
-	display.print(last_time_);
-
-	if (isClock_Finished_) {
-		last_time_ = timeClient.getFormattedTime().substring(6, 7);
-		isClock_Finished_ = false;
-	}
-
-
-	display.fillRect(87, s_y + 15, 110, s_y + 5, SSD1306_BLACK);
-	display.fillRect(87, s_y - 25, 110, s_y - 10, SSD1306_BLACK);
-
-
 	/*小时显示*/
 	display.setTextSize(3);
 	display.setCursor(3, 20);
 	display.print(timeClient.getFormattedTime().substring(0, 5));
+
+	/*秒显示*/
+	display.setTextSize(2);
+	display.setCursor(100, 26);
+	display.print(timeClient.getFormattedTime().substring(6, 9));
 
 	display.drawLine(0, 50, 128, 50, SSD1306_WHITE);
 
@@ -1218,318 +799,15 @@ void show_clock() {
 
 	/*星期显示*/
 	display.setTextSize(1);
-	display.setCursor(100, 55);
+	display.setCursor(72, 55);
 	display.print(get_days());
 
-	/*display.setTextSize(1);
+	display.setTextSize(1);
 	display.setCursor(95, 55);
-	display.print(temp + "deg");*/
+	display.print(temp + "deg");
 }
 
 void show_system_info() {
 	show_menu(SystemSitting_label[2 - 1]);
 	//show_menu_label();
-}
-
-void show_system_start_time() {
-	ctrl_title(SystemSitting_label[3 - 1], true);
-
-	display.setTextSize(1);
-
-	display.setCursor(0, 16);
-	display.print("Time(h):");
-	display.print(start_time / 1000 / 60 / 60);
-
-	display.setCursor(0, 28);
-	display.print("Time(m):");
-	display.print(start_time / 1000 / 60);
-
-	display.setCursor(0, 40);
-	display.print("Time(s):");
-	display.print(start_time / 1000);
-
-	display.setCursor(0, 52);
-	display.print("Time(ms):");
-	display.print(start_time);
-
-	start_time = millis();
-}
-
-void switch_desktop() {
-	show_menu(Function_label[2 - 1]);
-}
-
-void show_wifi_info() {
-	ctrl_title(WiFiTool_label[4 - 1], true);
-	display.setCursor(0, 16);
-	display.setTextSize(1);
-
-	display.println();
-	display.print("SSID:");
-	display.println(ssid);
-	display.println();
-
-	display.print("PWD:");
-	display.println(password);
-	display.println();
-
-	display.print("IP:");
-	display.println(WiFi.localIP());
-}
-
-void serial_test() {
-	ctrl_title(Debug_label[1 - 1], true);
-
-	display.setCursor(0, 20);
-	display.setTextSize(1);
-
-	display.println("Get Info:");
-
-	if (Serial.available())
-		serial_in = Serial.readString();
-
-	display.print(serial_in);
-}
-
-void update_fans_num() {
-	http.begin(client, GET_FANS_URL);
-	int httpCode = http.GET();
-	if (httpCode == HTTP_CODE_OK) {
-		String getStr = http.getString();
-		//Serial.println(getStr);
-		DynamicJsonDocument  jsonBuffer(2400);
-		deserializeJson(jsonBuffer, getStr);
-		JsonObject getJS = jsonBuffer.as<JsonObject>();
-		fans_num = getJS["data"]["follower"];
-	}
-	http.end();
-}
-
-void game_space_war() {
-	ctrl_title(Function_label[4 - 1] + "       " + String(space_war_score), true);
-
-	if (!space_isOver) {
-		timer_play = millis();
-		if (UP_KEY_DOWN) {
-			space_player_y -= 1;
-		}
-		if (DOWN_KEY_DOWN) {
-			space_player_y += 1;
-		}
-
-		if (space_player_y >= 64 - 8)
-			space_player_y = 64 - 8;
-		else if (space_player_y <= 0 + 13)
-			space_player_y = 13;
-
-		display.fillRoundRect(space_player_x, space_player_y, 4, 8, 2, SSD1306_WHITE);
-		display.fillRect(space_player_x + 5, space_player_y + 2, 3, 4, SSD1306_WHITE);
-
-		if (yes) {
-			for (int i = 0; i < 20; i++) {
-				if (space_player_shell_x[i] == 0) {
-					space_player_shell_x[i] += 2;
-					space_player_shell_y[i] = space_player_y + 4;
-					break;
-				}
-			}
-		}
-
-		for (int i = 0; i < 20; i++) {
-			if (space_player_shell_x[i] != 0) {
-				space_player_shell_x[i] += 2;
-				display.fillCircle(space_player_shell_x[i] + 10, space_player_shell_y[i], 1, SSD1306_WHITE);
-				if (space_player_shell_x[i] >= 128)
-					space_player_shell_x[i] = 0;
-			}
-		}
-
-		if (random(0, 30) == 20) {
-			for (int i = 0; i < 20; i++) {
-				if (space_stone_x[i] == -1) {
-					space_stone_x[i] = 140;
-					space_stone_speed_x[i] = random(1, 2);
-					space_stone_speed_y[i] = random(-1, 1);
-					space_stone_y[i] = random(15, 60);
-					break;
-				}
-			}
-		}
-
-		for (int i = 0; i < 20; i++) {
-			if (space_stone_x[i] != -1) {
-				space_stone_x[i] -= space_stone_speed_x[i];
-				space_stone_y[i] += space_stone_speed_y[i];
-				if (space_stone_y[i] >= 64 - 5 || space_stone_y[i] <= 13)
-					space_stone_speed_y[i] *= -1;
-				display.fillRect(space_stone_x[i], space_stone_y[i], 4, 4, SSD1306_WHITE);
-
-				if (space_stone_x[i] <= 0 - 4)
-					space_stone_x[i] = -1;
-
-				if (space_stone_x[i] <= 10 && space_stone_y[i] >= space_player_y - 4 && space_stone_y[i] <= space_player_y + 4) {
-					space_isOver = true;
-				}
-
-				for (int j = 0; j < 20; j++) {
-					if (space_player_shell_x[j] != 0 && space_player_shell_y[j] != 0 && space_stone_x[i] != -1 && space_stone_y[i] != -1) {
-						if (space_player_shell_x[j] >= space_stone_x[i] - 2 && space_player_shell_x[j] <= space_stone_x[i] + 2) {
-							if (space_player_shell_y[j] >= space_stone_y[i] - 2 && space_player_shell_y[j] <= space_stone_y[i] + 3) {
-								space_stone_x[i] = -1;
-								space_player_shell_x[j] = 0;
-								space_war_score++;
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	else {
-		ctrl_title(Function_label[4 - 1] + "       " + String(space_war_score), true);
-		if (space_war_score > space_history_best) {
-			EEPROM.write(2, space_war_score);
-			EEPROM.commit();
-			space_history_best = space_war_score;
-		}
-
-		if (space_over_y >= 25)
-			space_over_y -= 1;
-
-		display.setCursor(10, space_over_y);
-		display.setTextSize(2);
-		display.print("Game Over");
-
-		display.setCursor(10, space_over_y + 20);
-		display.setTextSize(1);
-		display.print("Score:" + String(space_war_score) + "   Best:" + String(space_history_best));
-
-		display.setCursor(10, space_over_y + 30);
-		display.setTextSize(1);
-		display.print("Click OK Continue");
-
-		if (space_over_y <= 25) {
-			if (yes) {
-				space_war_init();
-			}
-		}
-	}
-}
-
-void space_war_init() {
-	for (int i = 0; i < 20; i++) {
-		space_player_shell_x[i] = 0;
-		space_player_shell_y[i] = 0;
-		space_stone_x[i] = -1;
-		space_stone_y[i] = 30;
-		space_stone_speed_x[i] = 0;
-		space_stone_speed_y[i] = 0;
-	}
-	space_war_score = 0;
-	space_player_x = 0;
-	space_player_y = 20;
-	space_isOver = false;
-	space_over_y = 65;
-	space_history_best = EEPROM.read(2);
-}
-
-void show_bilibili_client() {
-	ctrl_title("Bilibili Client", true);
-	display.setCursor(2, 20);
-	display.print("Follower Number:");
-	display.setTextSize(2);
-	display.setCursor(2, 30);
-	display.print(fans_num);
-	display.setTextSize(1);
-}
-
-void update_bilibili_hotVideo() {
-	http.begin(client, GET_WATCH_URL);
-	int httpCode = http.GET();
-	if (httpCode == HTTP_CODE_OK) {
-		HotVideoHtml = http.getString();
-		Serial.println("HTML:"+HotVideoHtml);
-		DynamicJsonDocument  jsonBuffer(5600);
-		deserializeJson(jsonBuffer, HotVideoHtml);
-		JsonObject getJS = jsonBuffer.as<JsonObject>();
-		Serial.println(HotVideoHtml);
-		//fans_num = getJS["data"]["follower"];
-	}
-
-	else {
-		Serial.println(httpCode);
-	}
-	http.end();
-}
-
-void input_box(String title) {
-	ctrl_title(title, true);
-
-	display.setCursor(0, 25);
-	display.print("Password");
-
-	if (up) {
-		if (input_text_in < text_note_length - 1)
-			input_text_in++;
-		else
-			input_text_in = 0;
-		up = false;
-	}
-
-	else if (down) {
-		if (input_text_in > 0)
-			input_text_in--;
-		else
-			input_text_in = text_note_length - 1;
-		down = false;
-	}
-
-	for (int x = 0; x < input_text_width; x++) {
-		if (x == input_now_notice)
-			input_text[x] = text_note[input_text_in];
-	}
-
-	for (int x = 0; x < input_text_width; x++) {
-		passportText += input_text[x];
-	}
-
-	display.setCursor(8, 38);
-	display.print(passportText);
-
-	display.drawRoundRect(0, 35, 127, 13, 3, SSD1306_WHITE);
-
-	if (!hold)
-		passportText = "";
-
-	//Serial.println(input_now_notice);
-}
-
-void wifi_scan_update() {
-	WiFi.disconnect();
-	wifi_scan_num = WiFi.scanNetworks();
-
-	for (int i = 0; i < wifi_scan_num; i++) {
-		wifi_scan_label[i] = WiFi.SSID(i);
-		//Serial.println(WiFi.SSID(i));
-	}
-
-	/*display.clearDisplay();
-
-	display.setCursor(10, 25);
-	display.print("WiFi disconnect");*/
-}
-
-void wifi_show_connect() {
-	show_menu("WiFi Scan");
-}
-
-void read_desktop_mode() {
-	desktop_mode = EEPROM.read(1);
-	if (desktop_mode == 1)
-		menu_mode = "desktop";
-	else if (desktop_mode == 2)
-		menu_mode = "desktop_clock";
-	else if (desktop_mode == 3)
-		menu_mode = "desktop_OSLogo";
 }
